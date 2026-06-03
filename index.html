@@ -3,7 +3,7 @@
   <head>
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-    <title>CFD Max Lot Calculator</title>
+    <title>CFD All In Lot</title>
     <script crossorigin="anonymous" src="https://unpkg.com/react@18.3.1/umd/react.production.min.js" integrity="sha384-DGyLxAyjq0f9SPpVevD6IgztCFlnMF6oW/XQGmfe+IsZ8TqEiDrcHkMLKI6fiB/Z"></script>
     <script crossorigin="anonymous" src="https://unpkg.com/react-dom@18.3.1/umd/react-dom.production.min.js" integrity="sha384-gTGxhz21lVGYNMcdJOyq01Edg0jhn/c22nsx0kyqP0TxaV5WVdsSH1fSDUf5YJj1"></script>
     <script crossorigin="anonymous" src="https://unpkg.com/@babel/standalone@7.24.7/babel.min.js" integrity="sha384-AISI5AuDG6E8DeEiFMVB3rGQxhZt24OU0avMp+GMV64+tpnA3+Z6F5MT0f96iPva"></script>
@@ -113,7 +113,7 @@
           itemsPerLot: "100",
           price: "100",
           stopOutLevelPct: "20",
-          maxLossPct: "10",
+          stopLossPrice: "99",
         });
 
         const r = useMemo(() => {
@@ -122,7 +122,7 @@
           const itemsPerLot = toNumber(form.itemsPerLot);
           const price = toNumber(form.price);
           const stopOut = toNumber(form.stopOutLevelPct) / 100;
-          const maxLoss = toNumber(form.maxLossPct) / 100;
+          const stopLossPrice = toNumber(form.stopLossPrice);
 
           const valid =
             balance > 0 &&
@@ -131,17 +131,17 @@
             price > 0 &&
             stopOut >= 0 &&
             stopOut < 1 &&
-            maxLoss > 0 &&
-            maxLoss < 1;
+            stopLossPrice > 0 &&
+            stopLossPrice !== price;
 
           if (!valid) {
             return { valid: false };
           }
 
           const marginPerLot = (itemsPerLot * price) / leverage;
-          // Loss per lot when price moves against you by maxLoss %
-          const lossPerLot = itemsPerLot * price * maxLoss;
-          // Max lots so that stop-loss at maxLoss% price move triggers before broker stop-out
+          // Loss per lot = units per lot × |entry price − stop loss price|
+          const lossPerLot = itemsPerLot * Math.abs(price - stopLossPrice);
+          // Max lots so that stop-loss triggers before broker stop-out
           // At stop-out: equity = stopOut * usedMargin
           // equity = balance - lots * lossPerLot
           // balance - lots * lossPerLot = stopOut * lots * marginPerLot
@@ -173,10 +173,10 @@
 
         return (
           <div className="wrap">
-            <h1>CFD Max Lot Calculator</h1>
+            <h1>CFD All In Lot</h1>
             <p>
               Estimate maximum lot size using free margin, leverage, units per lot, stop-out level, and
-              your max acceptable loss %.
+              your target stop loss price.
             </p>
             <div className="grid">
               <label>
@@ -200,13 +200,13 @@
                 <input name="stopOutLevelPct" value={form.stopOutLevelPct} onChange={onChange} type="number" min="0" max="99.99" step="0.01" />
               </label>
               <label className="highlight">
-                Max Acceptable Loss % (your rule)
-                <input name="maxLossPct" value={form.maxLossPct} onChange={onChange} type="number" min="0.01" max="100" step="0.01" />
+                Target Stop Loss Price
+                <input name="stopLossPrice" value={form.stopLossPrice} onChange={onChange} type="number" min="0" step="0.0001" />
               </label>
             </div>
             <div className="card">
               {!r.valid ? (
-                <div className="warn">Please enter valid positive numbers. Stop-Out Level must be below 100%.</div>
+                <div className="warn">Please enter valid positive numbers. Stop-Out Level must be below 100%. Stop Loss Price must differ from Asset Price.</div>
               ) : (
                 <div className="metrics">
                   <div className="metric highlight">
@@ -226,11 +226,11 @@
                     <strong>{format(r.marginLevelAfterLoss, 2)}%</strong>
                   </div>
                   <div className="metric">
-                    <h3>Loss per Lot at Max Loss %</h3>
+                    <h3>Loss per Lot at Stop Loss</h3>
                     <strong>{format(r.lossPerLot, 2)}</strong>
                   </div>
                   <div className="metric">
-                    <h3>Expected Loss at Max Loss %</h3>
+                    <h3>Expected Loss at Stop Loss</h3>
                     <strong>{format(r.expectedLoss, 2)}</strong>
                   </div>
                   <div className="metric">
